@@ -15,6 +15,7 @@ import android.webkit.CookieManager;
 import android.content.Intent;
 import android.net.Uri;
 import android.graphics.Color;
+import android.view.MotionEvent;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
 import android.widget.Toast;
@@ -22,6 +23,8 @@ import android.widget.Toast;
 public class MainActivity extends Activity {
 
     private WebView webView;
+    private float touchStartY;
+    private boolean firstResume = true;
 
     private static final String WEBSITE =
         "https://geeras866-lab.github.io/JJ-Movies/";
@@ -42,6 +45,9 @@ public class MainActivity extends Activity {
         settings.setUseWideViewPort(true);
         settings.setSupportMultipleWindows(false);
 
+        // Always check the website for updated content.
+        settings.setCacheMode(WebSettings.LOAD_NO_CACHE);
+
         webView.setWebChromeClient(new WebChromeClient());
 
         webView.setWebViewClient(new WebViewClient() {
@@ -52,7 +58,26 @@ public class MainActivity extends Activity {
             }
         });
 
-        // Handle direct file downloads inside the Android app.
+        // Pull down at the top of the page to refresh.
+        webView.setOnTouchListener((view, event) -> {
+            switch (event.getAction()) {
+                case MotionEvent.ACTION_DOWN:
+                    touchStartY = event.getY();
+                    break;
+
+                case MotionEvent.ACTION_UP:
+                    float distance = event.getY() - touchStartY;
+
+                    if (distance > 150 && webView.getScrollY() == 0) {
+                        refreshWebsite();
+                    }
+                    break;
+            }
+
+            return false;
+        });
+
+        // Handle direct file downloads.
         webView.setDownloadListener(
             new DownloadListener() {
                 @Override
@@ -72,7 +97,9 @@ public class MainActivity extends Activity {
                             url, contentDisposition, mimeType);
 
                         request.setTitle(fileName);
-                        request.setDescription("Downloading from JJ Movies");
+                        request.setDescription(
+                            "Downloading from JJ Movies");
+
                         request.setNotificationVisibility(
                             DownloadManager.Request
                                 .VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
@@ -90,7 +117,8 @@ public class MainActivity extends Activity {
                         }
 
                         request.setDestinationInExternalPublicDir(
-                            Environment.DIRECTORY_DOWNLOADS, fileName);
+                            Environment.DIRECTORY_DOWNLOADS,
+                            fileName);
 
                         DownloadManager manager =
                             (DownloadManager) getSystemService(
@@ -98,6 +126,7 @@ public class MainActivity extends Activity {
 
                         if (manager != null) {
                             manager.enqueue(request);
+
                             Toast.makeText(
                                 MainActivity.this,
                                 "Download started. Check notifications.",
@@ -132,6 +161,30 @@ public class MainActivity extends Activity {
         }
     }
 
+    private void refreshWebsite() {
+        if (webView != null) {
+            webView.clearCache(false);
+            webView.loadUrl(WEBSITE);
+
+            Toast.makeText(
+                this,
+                "Refreshing JJ Movies...",
+                Toast.LENGTH_SHORT
+            ).show();
+        }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+
+        if (firstResume) {
+            firstResume = false;
+        } else if (webView != null) {
+            refreshWebsite();
+        }
+    }
+
     private boolean handleUrl(String url) {
         if (url == null) {
             return true;
@@ -151,27 +204,27 @@ public class MainActivity extends Activity {
             String path = uri.getPath() == null
                 ? "" : uri.getPath().toLowerCase();
 
-            // Keep website and Supabase pages inside the app.
             if (host != null &&
                 (host.equalsIgnoreCase("geeras866-lab.github.io")
-                || host.equalsIgnoreCase("tswyabgdldbsaopipvug.supabase.co"))) {
+                || host.equalsIgnoreCase(
+                    "tswyabgdldbsaopipvug.supabase.co"))) {
                 return false;
             }
 
-            // Let direct file links reach WebView's download handler.
-            if (path.matches(".*\\.(mp4|mkv|avi|mov|webm|zip|rar|pdf|apk)$")) {
+            if (path.matches(
+                ".*\\.(mp4|mkv|avi|mov|webm|zip|rar|pdf|apk)$")) {
                 return false;
             }
         }
 
-        // Open Telegram, browser and other external links in their apps.
         openExternal(url);
         return true;
     }
 
     private void openExternal(String url) {
         try {
-            Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+            Intent intent =
+                new Intent(Intent.ACTION_VIEW, Uri.parse(url));
             startActivity(intent);
         } catch (Exception e) {
             Toast.makeText(
