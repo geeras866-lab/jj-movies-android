@@ -9,8 +9,7 @@
         android:allowBackup="false"
         android:label="JJ Movies"
         android:icon="@drawable/ic_launcher"
-        android:theme="@android:style/Theme.Material.Light.NoActionBar"
-        android:usesCleartextTraffic="false">
+        android:theme="@android:style/Theme.Material.Light.NoActionBar">
 
         <activity
             android:name=".MainActivity"
