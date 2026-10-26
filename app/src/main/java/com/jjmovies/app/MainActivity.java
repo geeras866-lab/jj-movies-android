@@ -12,28 +12,45 @@ import android.webkit.WebSettings;
 import android.webkit.DownloadListener;
 import android.webkit.URLUtil;
 import android.webkit.CookieManager;
+import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceError;
 import android.content.Intent;
 import android.net.Uri;
 import android.graphics.Color;
 import android.view.MotionEvent;
+import android.view.View;
 import android.view.ViewGroup;
+import android.view.Gravity;
 import android.widget.FrameLayout;
+import android.widget.LinearLayout;
+import android.widget.TextView;
+import android.widget.Button;
 import android.widget.Toast;
 
 public class MainActivity extends Activity {
 
     private WebView webView;
+    private FrameLayout rootLayout;
+    private LinearLayout offlinePanel;
+
     private float touchStartY;
-    private boolean firstResume = true;
+    private String currentPageUrl =
+        "https://geeras866-lab.github.io/JJ-Movies/";
 
     private static final String WEBSITE =
         "https://geeras866-lab.github.io/JJ-Movies/";
+
+    private static final String SITE_HOST =
+        "geeras866-lab.github.io";
+
+    private static final String SUPABASE_HOST =
+        "tswyabgdldbsaopipvug.supabase.co";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        FrameLayout rootLayout = new FrameLayout(this);
+        rootLayout = new FrameLayout(this);
         rootLayout.setBackgroundColor(Color.rgb(9, 13, 24));
 
         webView = new WebView(this);
@@ -45,20 +62,81 @@ public class MainActivity extends Activity {
         settings.setUseWideViewPort(true);
         settings.setSupportMultipleWindows(false);
 
-        // Always check the website for updated content.
-        settings.setCacheMode(WebSettings.LOAD_NO_CACHE);
+        // Allow normal WebView caching.
+        // Do not disable cache or clear it on every refresh.
+        settings.setCacheMode(WebSettings.LOAD_DEFAULT);
 
         webView.setWebChromeClient(new WebChromeClient());
 
         webView.setWebViewClient(new WebViewClient() {
+
             @Override
             public boolean shouldOverrideUrlLoading(
                     WebView view, String url) {
                 return handleUrl(url);
             }
+
+            @Override
+            public boolean shouldOverrideUrlLoading(
+                    WebView view, WebResourceRequest request) {
+                return handleUrl(request.getUrl().toString());
+            }
+
+            @Override
+            public void onPageStarted(
+                    WebView view, String url, android.graphics.Bitmap favicon) {
+                super.onPageStarted(view, url, favicon);
+
+                if (isInternalUrl(url)) {
+                    currentPageUrl = url;
+                }
+            }
+
+            @Override
+            public void onPageFinished(
+                    WebView view, String url) {
+                super.onPageFinished(view, url);
+
+                if (isInternalUrl(url)) {
+                    currentPageUrl = url;
+                    hideOfflineMessage();
+                }
+            }
+
+            // Android 6 and newer: handle main-page errors only.
+            @Override
+            public void onReceivedError(
+                    WebView view,
+                    WebResourceRequest request,
+                    WebResourceError error) {
+
+                super.onReceivedError(view, request, error);
+
+                if (request.isForMainFrame()) {
+                    showOfflineMessage();
+                }
+            }
+
+            // Compatibility with older Android versions.
+            @SuppressWarnings("deprecation")
+            @Override
+            public void onReceivedError(
+                    WebView view,
+                    int errorCode,
+                    String description,
+                    String failingUrl) {
+
+                super.onReceivedError(
+                    view, errorCode, description, failingUrl);
+
+                if (failingUrl != null
+                        && failingUrl.equals(view.getUrl())) {
+                    showOfflineMessage();
+                }
+            }
         });
 
-        // Pull down at the top of the page to refresh.
+        // Pull down at the top of the current page to refresh.
         webView.setOnTouchListener((view, event) -> {
             switch (event.getAction()) {
                 case MotionEvent.ACTION_DOWN:
@@ -69,7 +147,7 @@ public class MainActivity extends Activity {
                     float distance = event.getY() - touchStartY;
 
                     if (distance > 150 && webView.getScrollY() == 0) {
-                        refreshWebsite();
+                        refreshCurrentPage();
                     }
                     break;
             }
@@ -77,7 +155,7 @@ public class MainActivity extends Activity {
             return false;
         });
 
-        // Handle direct file downloads.
+        // Keep the existing file-download functionality.
         webView.setDownloadListener(
             new DownloadListener() {
                 @Override
@@ -152,6 +230,7 @@ public class MainActivity extends Activity {
             ViewGroup.LayoutParams.MATCH_PARENT
         ));
 
+        createOfflinePanel();
         setContentView(rootLayout);
 
         if (savedInstanceState != null) {
@@ -161,28 +240,141 @@ public class MainActivity extends Activity {
         }
     }
 
-    private void refreshWebsite() {
-        if (webView != null) {
-            webView.clearCache(false);
-            webView.loadUrl(WEBSITE);
+    private void createOfflinePanel() {
+        offlinePanel = new LinearLayout(this);
+        offlinePanel.setOrientation(LinearLayout.VERTICAL);
+        offlinePanel.setGravity(Gravity.CENTER);
+        offlinePanel.setPadding(32, 32, 32, 32);
+        offlinePanel.setBackgroundColor(Color.rgb(9, 13, 24));
+        offlinePanel.setVisibility(View.GONE);
 
-            Toast.makeText(
-                this,
-                "Refreshing JJ Movies...",
-                Toast.LENGTH_SHORT
-            ).show();
+        TextView logo = new TextView(this);
+        logo.setText("JJ Movies");
+        logo.setTextColor(Color.rgb(255, 56, 103));
+        logo.setTextSize(30);
+        logo.setGravity(Gravity.CENTER);
+        logo.setTypeface(null, android.graphics.Typeface.BOLD);
+
+        TextView icon = new TextView(this);
+        icon.setText("\uD83D\uDCF6");
+        icon.setTextSize(42);
+        icon.setGravity(Gravity.CENTER);
+        icon.setPadding(0, 24, 0, 16);
+
+        TextView title = new TextView(this);
+        title.setText("Check your internet connection");
+        title.setTextColor(Color.WHITE);
+        title.setTextSize(20);
+        title.setGravity(Gravity.CENTER);
+        title.setTypeface(null, android.graphics.Typeface.BOLD);
+
+        TextView message = new TextView(this);
+        message.setText(
+            "Please connect to the internet and try again.");
+        message.setTextColor(Color.rgb(190, 198, 214));
+        message.setTextSize(15);
+        message.setGravity(Gravity.CENTER);
+        message.setPadding(8, 12, 8, 24);
+
+        Button retryButton = new Button(this);
+        retryButton.setText("Try Again");
+        retryButton.setTextColor(Color.WHITE);
+        retryButton.setBackgroundTintList(
+            android.content.res.ColorStateList.valueOf(
+                Color.rgb(255, 56, 103)));
+
+        retryButton.setOnClickListener(v -> retryCurrentPage());
+
+        offlinePanel.addView(logo);
+        offlinePanel.addView(icon);
+        offlinePanel.addView(title);
+        offlinePanel.addView(message);
+        offlinePanel.addView(retryButton);
+
+        FrameLayout.LayoutParams panelParams =
+            new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT);
+
+        rootLayout.addView(offlinePanel, panelParams);
+    }
+
+    private void showOfflineMessage() {
+        if (offlinePanel != null) {
+            offlinePanel.setVisibility(View.VISIBLE);
+            offlinePanel.bringToFront();
         }
     }
 
-    @Override
-    protected void onResume() {
-        super.onResume();
-
-        if (firstResume) {
-            firstResume = false;
-        } else if (webView != null) {
-            refreshWebsite();
+    private void hideOfflineMessage() {
+        if (offlinePanel != null) {
+            offlinePanel.setVisibility(View.GONE);
         }
+    }
+
+    private void retryCurrentPage() {
+        if (webView == null) {
+            return;
+        }
+
+        String target = currentPageUrl;
+
+        if (target == null || target.trim().isEmpty()) {
+            target = WEBSITE;
+        }
+
+        if (!isInternalUrl(target)) {
+            target = WEBSITE;
+        }
+
+        webView.loadUrl(target);
+    }
+
+    private void refreshCurrentPage() {
+        if (webView == null) {
+            return;
+        }
+
+        // Refresh the current page, not always the home page.
+        String target = webView.getUrl();
+
+        if (target == null || !isInternalUrl(target)) {
+            target = currentPageUrl;
+        }
+
+        if (target == null || !isInternalUrl(target)) {
+            target = WEBSITE;
+        }
+
+        webView.loadUrl(target);
+
+        Toast.makeText(
+            this,
+            "Refreshing JJ Movies...",
+            Toast.LENGTH_SHORT
+        ).show();
+    }
+
+    private boolean isInternalUrl(String url) {
+        if (url == null) {
+            return false;
+        }
+
+        Uri uri = Uri.parse(url);
+        String scheme = uri.getScheme();
+        String host = uri.getHost();
+
+        if (scheme == null || host == null) {
+            return false;
+        }
+
+        if (!"http".equalsIgnoreCase(scheme)
+                && !"https".equalsIgnoreCase(scheme)) {
+            return false;
+        }
+
+        return host.equalsIgnoreCase(SITE_HOST)
+            || host.equalsIgnoreCase(SUPABASE_HOST);
     }
 
     private boolean handleUrl(String url) {
@@ -205,9 +397,8 @@ public class MainActivity extends Activity {
                 ? "" : uri.getPath().toLowerCase();
 
             if (host != null &&
-                (host.equalsIgnoreCase("geeras866-lab.github.io")
-                || host.equalsIgnoreCase(
-                    "tswyabgdldbsaopipvug.supabase.co"))) {
+                (host.equalsIgnoreCase(SITE_HOST)
+                || host.equalsIgnoreCase(SUPABASE_HOST))) {
                 return false;
             }
 
@@ -236,7 +427,25 @@ public class MainActivity extends Activity {
     }
 
     @Override
+    protected void onResume() {
+        super.onResume();
+
+        // Intentionally do not reload here.
+        // Returning from another app should preserve the current page.
+    }
+
+    @Override
     public void onBackPressed() {
+        if (offlinePanel != null
+                && offlinePanel.getVisibility() == View.VISIBLE) {
+            if (webView != null && webView.canGoBack()) {
+                webView.goBack();
+            } else {
+                super.onBackPressed();
+            }
+            return;
+        }
+
         if (webView != null && webView.canGoBack()) {
             webView.goBack();
         } else {
