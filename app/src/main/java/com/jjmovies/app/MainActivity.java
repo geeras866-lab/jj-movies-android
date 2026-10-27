@@ -1,4 +1,3 @@
-
 package com.jjmovies.app;
 
 import android.app.Activity;
@@ -35,12 +34,15 @@ public class MainActivity extends Activity {
 
     private float touchStartY;
     private String currentPageUrl =
-        "https://geeras866-lab.github.io/JJ-Movies/";
+        "https://jj-movies.pages.dev/";
 
     private static final String WEBSITE =
-        "https://geeras866-lab.github.io/JJ-Movies/";
+        "https://jj-movies.pages.dev/";
 
     private static final String SITE_HOST =
+        "jj-movies.pages.dev";
+
+    private static final String LEGACY_SITE_HOST =
         "geeras866-lab.github.io";
 
     private static final String SUPABASE_HOST =
@@ -374,6 +376,7 @@ public class MainActivity extends Activity {
         }
 
         return host.equalsIgnoreCase(SITE_HOST)
+            || host.equalsIgnoreCase(LEGACY_SITE_HOST)
             || host.equalsIgnoreCase(SUPABASE_HOST);
     }
 
@@ -398,6 +401,7 @@ public class MainActivity extends Activity {
 
             if (host != null &&
                 (host.equalsIgnoreCase(SITE_HOST)
+                || host.equalsIgnoreCase(LEGACY_SITE_HOST)
                 || host.equalsIgnoreCase(SUPABASE_HOST))) {
                 return false;
             }
